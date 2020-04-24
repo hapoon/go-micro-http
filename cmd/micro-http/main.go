@@ -1,6 +1,7 @@
 package main
 
 import (
+	"go-micro-http/internal/app/micro-http/service"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -15,6 +16,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	e.GET("/", hello)
+	service.UseDummyRouting(e)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }
