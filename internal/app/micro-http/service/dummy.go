@@ -1,9 +1,7 @@
 package service
 
 import (
-	"context"
-	"fmt"
-	"io/ioutil"
+	"go-micro-http/internal/app/micro-http/repository"
 	"net/http"
 	"time"
 
@@ -11,66 +9,61 @@ import (
 )
 
 var (
-	url        string        = "http://dummy.restapiexample.com/api/v1/employees"
 	apiTimeout time.Duration = 5 * time.Second
 )
 
 // DummyAccesser is interface of dummyAccesser.
 type DummyAccesser interface {
+	GetEmployee(ctx echo.Context) error
 	GetEmployees(ctx echo.Context) error
 }
 
 type dummyAccesser struct {
+	dummyRepository repository.DummyEmployee
 }
 
-func (d *dummyAccesser) GetEmployees(c echo.Context) error {
-	client := http.DefaultClient
+func (d *dummyAccesser) GetEmployee(c echo.Context) error {
+	id := c.Param("id")
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), apiTimeout)
-	defer cancelFunc()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	employee, err := d.dummyRepository.Find(id)
 	if err != nil {
+		c.Logger().Error(err)
+		c.NoContent(http.StatusInternalServerError)
 		return err
 	}
 
-	ch := make(chan struct{})
+	c.JSON(http.StatusOK, employee)
 
-	go func() {
-		res, err := client.Do(req)
-		if err != nil {
-			fmt.Println(err)
-			ch <- struct{}{}
-			return
-		}
-		defer res.Body.Close()
+	return nil
+}
 
-		body, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			c.Logger().Error(err)
-			c.NoContent(http.StatusInternalServerError)
-			return
-		}
+func (d *dummyAccesser) GetEmployees(c echo.Context) error {
+	employees, err := d.dummyRepository.List()
+	if err != nil {
+		c.Logger().Error(err)
+		c.NoContent(http.StatusInternalServerError)
+		return err
+	}
 
-		c.JSON(http.StatusOK, string(body))
+	c.JSON(http.StatusOK, employees)
 
-		ch <- struct{}{}
-	}()
-
-	<-ch
 	return nil
 }
 
 // NewDummyAccesser is constructer of DummyAccesser interface.
-func NewDummyAccesser() DummyAccesser {
-	return &dummyAccesser{}
+func NewDummyAccesser(repo repository.DummyEmployee) DummyAccesser {
+	return &dummyAccesser{
+		dummyRepository: repo,
+	}
 }
 
 // UseDummyRouting is routing for dummy.
 func UseDummyRouting(e *echo.Echo) {
-	da := NewDummyAccesser()
+	da := NewDummyAccesser(repository.NewDummyEmployee())
+
 	g := e.Group("/employee")
 	{
 		g.GET("", da.GetEmployees)
+		g.GET("/:id", da.GetEmployee)
 	}
 }
